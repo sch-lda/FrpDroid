@@ -23,7 +23,7 @@ class BootReceiver : BroadcastReceiver() {
                 startIntent.putExtra("tok", prefs.getString("tok", "") ?: "")
                 startIntent.putExtra("user", prefs.getString("user", "") ?: "")
                 startIntent.putExtra("metadatas", prefs.getString("metadatas", "") ?: "")
-                startIntent.putExtra("proxies", prefs.getString("proxies", "[]") ?: "[]")
+                startIntent.putExtra("proxies", loadRuntimeRulesJson(prefs))
                 startIntent.putExtra("notif_enabled", notifEnabled)
                 startIntent.putExtra(
                     "notif_running",

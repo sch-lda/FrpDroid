@@ -136,12 +136,19 @@ fun savePrefs(
         .apply()
 }
 
-fun loadProxies(prefs: SharedPreferences, key: String = "proxies"): List<ProxyConfig> = try {
+private fun loadRules(prefs: SharedPreferences, key: String): List<ProxyConfig> = try {
     val arr = JSONArray(prefs.getString(key, "[]") ?: "[]")
     (0 until arr.length()).map { ProxyConfig.fromJson(arr.getJSONObject(it)) }
 } catch (e: Exception) {
     emptyList()
 }
+
+private fun loadProxies(prefs: SharedPreferences) = loadRules(prefs, "proxies")
+
+private fun loadVisitors(prefs: SharedPreferences) = loadRules(prefs, "visitors")
+
+internal fun loadRuntimeRulesJson(prefs: SharedPreferences): String =
+    listToJson(loadProxies(prefs) + loadVisitors(prefs))
 
 fun listToJson(list: List<ProxyConfig>): String {
     val arr = JSONArray()
@@ -174,8 +181,8 @@ fun migrateServers(prefs: SharedPreferences): List<ServerConfig> {
     val tok = prefs.getString("tok", "") ?: ""
     val user = prefs.getString("user", "") ?: ""
     val metadatas = prefs.getString("metadatas", "") ?: ""
-    val proxies = loadProxies(prefs, "proxies")
-    val visitors = loadProxies(prefs, "visitors")
+    val proxies = loadProxies(prefs)
+    val visitors = loadVisitors(prefs)
     val name = if (addr.isBlank()) "Server 1" else addr
     return listOf(ServerConfig(1, name, addr, port, tok, user, metadatas, proxies, visitors))
 }
@@ -279,9 +286,11 @@ fun writeVisitor(sb: StringBuilder, v: ProxyConfig) {
     if (v.secretKey.isNotBlank()) sb.append("secretKey = \"${v.secretKey}\"\n")
     if (v.bindAddr.isNotBlank()) sb.append("bindAddr = \"${v.bindAddr}\"\n")
     if (v.bindPort.isNotBlank()) sb.append("bindPort = ${v.bindPort}\n")
-    if (v.fallbackTo.isNotBlank()) sb.append("fallbackTo = \"${v.fallbackTo}\"\n")
-    if (v.fallbackTimeoutMs.isNotBlank()) sb.append("fallbackTimeoutMs = ${v.fallbackTimeoutMs}\n")
-    sb.append("keepTunnelOpen = ${v.keepTunnelOpen}\n")
+    if (v.type == "xtcp") {
+        if (v.fallbackTo.isNotBlank()) sb.append("fallbackTo = \"${v.fallbackTo}\"\n")
+        if (v.fallbackTimeoutMs.isNotBlank()) sb.append("fallbackTimeoutMs = ${v.fallbackTimeoutMs}\n")
+        sb.append("keepTunnelOpen = ${v.keepTunnelOpen}\n")
+    }
 }
 
 // ---------- TOML 解析（导入） ----------
@@ -681,8 +690,8 @@ fun AppMain() {
     var tok by rememberSaveable { mutableStateOf(prefs.getString("tok", "") ?: "") }
     var user by rememberSaveable { mutableStateOf(prefs.getString("user", "") ?: "") }
     var meta by rememberSaveable { mutableStateOf(prefs.getString("metadatas", "") ?: "") }
-    var proxies by remember { mutableStateOf(loadProxies(prefs, "proxies")) }
-    var visitors by remember { mutableStateOf(loadProxies(prefs, "visitors")) }
+    var proxies by remember { mutableStateOf(loadProxies(prefs)) }
+    var visitors by remember { mutableStateOf(loadVisitors(prefs)) }
     var autoStart by rememberSaveable { mutableStateOf(prefs.getBoolean("auto_start", false)) }
     var autoStartCf by rememberSaveable { mutableStateOf(prefs.getBoolean("auto_start_cf", false)) }
     var cfEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("cf_enabled", false)) }
@@ -1105,7 +1114,7 @@ fun HomeTab(
                                 intent.putExtra("tok", prefs.getString("tok", "") ?: "")
                                 intent.putExtra("user", prefs.getString("user", "") ?: "")
                                 intent.putExtra("metadatas", prefs.getString("metadatas", "") ?: "")
-                                intent.putExtra("proxies", prefs.getString("proxies", "[]") ?: "[]")
+                                intent.putExtra("proxies", loadRuntimeRulesJson(prefs))
                                 intent.putExtra("notif_enabled", prefs.getBoolean("notif_enabled", true))
                                 intent.putExtra("notif_running", if ((prefs.getString("lang", "zh") ?: "zh") == "zh") "服务运行中" else "Service Running")
                                 intent.putExtra("notif_stopped", if ((prefs.getString("lang", "zh") ?: "zh") == "zh") "已停止" else "Stopped")
